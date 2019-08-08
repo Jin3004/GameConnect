@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <future>
 #include <string_view>
 #include <queue>
 namespace beast = boost::beast;         // from <boost/beast.hpp>
@@ -23,7 +24,6 @@ class Connection {
 private:
   std::string myIP;
   unsigned short port;
-  std::thread game;
   std::thread server;
   std::queue<void*> temporary_data;
 
@@ -75,7 +75,7 @@ private:
 	}
   };
 
-  void doSession(tcp::socket &&socket) {//実際にリクエストを受け取ってレスポンスを返す
+  void doSession(tcp::socket && socket) {//実際にリクエストを受け取ってレスポンスを返す
 	bool close = false;
 	beast::error_code ec;
 	beast::flat_buffer buf;
@@ -87,20 +87,41 @@ private:
 	  if (ec)return fail(ec, "read");
 	}
   }
+
+  void sendRequest(std::string_view IP, std::string_view port, void* data) {//`IP`に`data`を送る
+	net::io_context ioc;
+	tcp::resolver resolver(ioc);
+	beast::tcp_stream stream(ioc);
+	const auto results = resolver.resolve(IP, port);
+	stream.connect(results);
+	http::request<http::dynamic_body> req(http::verb::post, "/", 11);
+	req.set(http::field::host, IP);
+	req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+	req.body() = data;
+	http::write(stream, req);
+	//ここで実際にリクエストを送信
+	beast::flat_buffer buf;
+	http::response<http::dynamic_body> res;//レスポンス受け取り用のインスタンス
+	http::read(stream, buf, res);
+
+  }
+
 public:
-  
+
   void waitRequest() {
 	net::io_context ioc(1);
 	tcp::acceptor acceptor(ioc, { net::ip::make_address(this->myIP), this->port });
 	for (;;) {
 	  tcp::socket socket(ioc);
 	  acceptor.accept(socket);
-	  std::thread(&Connection::doSession, std::move(socket)).detach();
+	  std::thread(&Connection::doSession, this, std::move(socket)).detach();
 	}
   }
-  explicit Connection(void (*mainloop)(), unsigned p) : game(&mainloop, this), server(&Connection::waitRequest, this), port(p) {
+  explicit Connection(unsigned p) : port(p) {
 	if (getIP(myIP) == -1)throw "IPアドレスを取得できません。";
 	else std::cout << "goes well" << std::endl;
+	server = std::thread(&Connection::waitRequest, this);
+	//HTTP通信のスレッドを立ち上げる
   }
 
   int Send(std::map<std::string, std::string> data, std::string_view IP) {//dataをIPのIPアドレスに送信する
@@ -123,7 +144,7 @@ public:
 
   ~Connection() {
 	server.join();
-	game.join();
   }
+  //デストラクタ
 
 };

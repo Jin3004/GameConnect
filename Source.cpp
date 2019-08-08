@@ -3,11 +3,8 @@
 #include <iostream>
 #include "Header.h"
 
-void func() {
-  return;
-}
-
 int main() {
-  Connection a(func, 3000);
+  Connection a(3000);
+  std::cout << "f" << std::endl;
   return 0;
 }
