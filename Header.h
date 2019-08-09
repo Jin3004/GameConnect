@@ -12,20 +12,32 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include <future>
 #include <string_view>
 #include <queue>
+#include <map>
+#include <sstream>
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+
+using Data = std::map<std::string_view, std::string_view>;
+
+std::vector<std::string> split(std::string_view str, char separator) {//文字列分割関数
+  std::stringstream ss(std::string(str) + separator);
+  std::string buf;
+  std::vector<std::string> res;
+  while (std::getline(ss, buf, separator)) {
+	res.push_back(buf);
+  }
+}
 
 class Connection {
 private:
   std::string myIP;
   unsigned short port;
   std::thread server;
-  std::queue<void*> temporary_data;
+  std::queue<Data> temporary_data;
 
   int getIP(std::string& IP) {//引数にIPアドレスを書き込む
 	WSADATA wsadata;
@@ -43,10 +55,55 @@ private:
 	return 0;
   }
 
+  int sendRequest(std::string_view IP, std::string_view port, Data data) {//`IP`に`data`を送る(戻り値はレスポンス)
+	net::io_context ioc;
+	tcp::resolver resolver(ioc);
+	beast::tcp_stream stream(ioc);
+	const auto results = resolver.resolve(IP, port);
+	stream.connect(results);
+	http::request<http::string_body> req(http::verb::post, "/", 11);
+	req.set(http::field::host, IP);
+	req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+	//リクエストを送るための準備
+
+	{//dataを文字列に変換してあげる
+	  std::string parsed = "";
+	  for (const auto& m : data) {
+		parsed += m.first;
+		parsed += '=';
+		parsed += m.second;
+		parsed += '&';
+	  }
+	  parsed.pop_back();
+	  req.body() = parsed;
+	}
+
+	http::write(stream, req);
+	//ここで実際にリクエストを送信
+	beast::flat_buffer buf;
+	http::response<http::string_body> res;//レスポンス受け取り用のインスタンス
+	http::read(stream, buf, res);
+	if (res.body() == "0")return 0;//成功
+	else return -1;//失敗
+  }
+
   template<class Send>
-  int handleRequest(http::request<http::dynamic_body> && req, Send && send) {//リクエストが来たときの処理を行う
+  int returnResponse(http::request<http::string_body> && req, Send && send) {//リクエストが来たときの処理を行う
 	if (req.method() != http::verb::post)return -1;
-	this->temporary_data.push(req.body());
+
+	Data receivedData;
+	{//文字列から実際のデータに変換する
+	  auto tmp = split(req.body(), '&');
+	  for (const auto& v : tmp) {
+		auto expr = split(v, '=');
+		auto left = expr[0];
+		auto right = expr[1];
+		receivedData[left] = right;
+	  }
+	}
+
+	temporary_data.push(receivedData);
+
 	http::response<http::string_body> res;
 	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
 	res.set(http::field::content_type, "application/text");
@@ -84,26 +141,13 @@ private:
 	  http::request<http::string_body> req;
 	  http::read(socket, buf, req, ec);
 	  if (ec == http::error::end_of_stream)return;
-	  if (ec)return fail(ec, "read");
+	  if (ec)return fail(ec, "read");//リクエストの読み込み失敗
+	  returnResponse(std::move(req), lambda);
+	  //ここでレスポンスを返す
+	  if (ec)return fail(ec, "write");//レスポンスに書き込み失敗
+	  if (close)break;
 	}
-  }
-
-  void sendRequest(std::string_view IP, std::string_view port, void* data) {//`IP`に`data`を送る
-	net::io_context ioc;
-	tcp::resolver resolver(ioc);
-	beast::tcp_stream stream(ioc);
-	const auto results = resolver.resolve(IP, port);
-	stream.connect(results);
-	http::request<http::dynamic_body> req(http::verb::post, "/", 11);
-	req.set(http::field::host, IP);
-	req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-	req.body() = data;
-	http::write(stream, req);
-	//ここで実際にリクエストを送信
-	beast::flat_buffer buf;
-	http::response<http::dynamic_body> res;//レスポンス受け取り用のインスタンス
-	http::read(stream, buf, res);
-
+	socket.shutdown(tcp::socket::shutdown_send, ec);
   }
 
 public:
@@ -124,22 +168,15 @@ public:
 	//HTTP通信のスレッドを立ち上げる
   }
 
-  int Send(std::map<std::string, std::string> data, std::string_view IP) {//dataをIPのIPアドレスに送信する
-	//まずこれらのデータを文字列に変換する
-	std::string req = "";
-	for (const auto& m : data) {
-	  std::string tmp = "";
-	  tmp += m.first;
-	  tmp += "=";
-	  tmp += m.second;
-	  tmp += "&";
-	  req.append(tmp);
-	}
+  int Send(Data data, std::string_view IP) {//dataをIPのIPアドレスに送信する
+	if (sendRequest(IP, std::to_string(port), data) != 0)return -1;//失敗
+	else return 0;
   }
-  void* Get() {
-	auto ptr = temporary_data.front();
+
+  auto Get() {
+	auto data = temporary_data.front();
 	temporary_data.pop();
-	return ptr;
+	return data;
   }
 
   ~Connection() {

@@ -4,7 +4,5 @@
 #include "Header.h"
 
 int main() {
-  Connection a(3000);
-  std::cout << "f" << std::endl;
   return 0;
 }
