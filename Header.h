@@ -49,7 +49,7 @@ namespace Jin {
 	}
 
   public:
-	explicit GameConnect(std::size_t port) : sub(&GameConnect::serverside, this, port) {}//ポート番号を指定してソケットを開く
+	explicit GameConnect(std::size_t port = 3000) : sub(&GameConnect::serverside, this, port) {}//ポート番号を指定してソケットを開く
 	~GameConnect() { sub.interrupt(); }
 
 	void Send(std::string_view IP, std::size_t port, Data& data) {//IPのportにdataを送信する
