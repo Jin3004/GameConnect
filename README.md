@@ -43,7 +43,7 @@ struct pos{
 
 int main() {
 
-  Jin::GameConnect connection(3000);
+  Jin::GameConnect connection(3000);//ポート3000でソケットを開く
   pos p;
 
   p = *(pos*)connection.Get();//通信用のデータから実際の型に変換します
