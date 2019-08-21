@@ -38,7 +38,7 @@ namespace Jin {
 	udp::resolver resolver{ ioc };
 	std::queue<std::decay_t<Data>> temporary_data;
 	boost::thread sub;
-	void serverside(short port) {//サーバーを立てる
+	void serverside(std::size_t port) {//サーバーを立てる
 	  udp::socket socket(ioc, udp::endpoint(udp::v4(), port));
 	  Data buf = {};
 	  udp::endpoint endpoint;
@@ -49,28 +49,18 @@ namespace Jin {
 	}
 
   public:
-	explicit GameConnect(std::size_t port) : sub(&GameConnect::serverside, this, port) {}
+	explicit GameConnect(std::size_t port) : sub(&GameConnect::serverside, this, port) {}//ポート番号を指定してソケットを開く
 	~GameConnect() { sub.interrupt(); }
 
-	[[nodiscard]] const char* Send(std::string_view IP, std::size_t port, Data& data) {//IPのportにdataを送信する(戻り値はレスポンス)
+	void Send(std::string_view IP, std::size_t port, Data& data) {//IPのportにdataを送信する
 	  udp::socket socket(ioc);
-	  {
-		udp::endpoint endpoint = *resolver.resolve(udp::v4(), IP, std::to_string(port)).begin();
-		socket.open(udp::v4());
-		socket.send_to(boost::asio::buffer(data), endpoint);
-	  }
-	  {
-		char buf[MAX_SIZE] = {};
-		udp::endpoint endpoint;
-		std::size_t length = socket.receive_from(boost::asio::buffer(buf), endpoint);
-		std::cout.write(buf, length);
-		return (const char*)buf;
-	  }
+	  udp::endpoint endpoint = *resolver.resolve(udp::v4(), IP, std::to_string(port)).begin();
+	  socket.open(udp::v4());
+	  socket.send_to(boost::asio::buffer(data), endpoint);
 	}
 
-	const char* Get() {
-	  std::cout << "Nothing's coming" << std::endl;
-	  while (temporary_data.empty());
+	const char* Get() {//送信されたデータを読む
+	  while (temporary_data.empty());//もしキューの中身が空だったらずっと待つ
 	  auto res = temporary_data.front();
 	  temporary_data.pop();
 	  return res;
