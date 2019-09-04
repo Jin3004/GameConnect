@@ -1,5 +1,7 @@
+#ifndef GameConnect_HEADER
+#define GameConnect_HEADER
+
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
-#define _WIN32_WINNT 0x0601
 #define _CRT_SECURE_NO_WARNINGS
 #define BOOST_DATE_TIME_NO_LIB
 #define BOOST_REGEX_NO_LIB
@@ -15,8 +17,8 @@ using boost::asio::ip::udp;
 
 namespace Jin {
 
-  constexpr std::size_t MAX_SIZE = 256;
-  using Data = char[MAX_SIZE];
+  //constexpr std::size_t MAX_SIZE = 2048;
+  using Data = char[2048];
 
   [[nodiscard]] std::string getIP() {//この関数を実行したマシンのIPアドレスを返す
 	WSADATA wsadata;
@@ -68,20 +70,33 @@ namespace Jin {
 	  sub.join();
 	}
 
-	void Send(std::string_view IP, unsigned short port, Data& data) {//IPのportにdataを送信する
+	template<class T>
+	void Send(std::string_view IP, unsigned short port, T& data) {//IPのportにdataを送信する
 	  udp::socket socket(ioc);
 	  udp::endpoint endpoint = *resolver.resolve(udp::v4(), IP, std::to_string(port)).begin();
 	  socket.open(udp::v4());
-	  socket.send_to(boost::asio::buffer(data), endpoint);
+	  Data send;
+	  *(T*)send = data;
+	  socket.send_to(boost::asio::buffer(send), endpoint);
 	}
 
-	const char* Get() {//送信されたデータを読む
-	  while (temporary_data.empty());//もしキューの中身が空だったらずっと待つ
+	template<class T>
+	T Get(bool& exit) {//送信されたデータを読む
+	  while (!exit && temporary_data.empty());//もしキューの中身が空だったらずっと待つ
+	  if (exit)throw "Thread terminated.";
 	  auto res = temporary_data.front();
 	  temporary_data.pop();
-	  return res;
+	  return *(T*)res;
+	}
+
+	template<class T>
+	T Get() {//送信されたデータを読む
+	  bool ex = false;
+	  return Get<T>(ex);
 	}
 
   };
 
 }
+
+#endif
