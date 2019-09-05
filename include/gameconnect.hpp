@@ -20,10 +20,10 @@ namespace Jin {
   //constexpr std::size_t MAX_SIZE = 2048;
   using Data = char[2048];
 
-  [[nodiscard]] std::string getIP() {//‚±‚ÌŠÖ”‚ğÀs‚µ‚½ƒ}ƒVƒ“‚ÌIPƒAƒhƒŒƒX‚ğ•Ô‚·
+  [[nodiscard]] std::string getIP() {//ã“ã®é–¢æ•°ã‚’å®Ÿè¡Œã—ãŸãƒã‚·ãƒ³ã®IPã‚¢ãƒ‰ãƒ¬ã‚¹ã‚’è¿”ã™
 	WSADATA wsadata;
 	if (WSAStartup(MAKEWORD(1, 1), &wsadata) != 0)throw "Cannot get your IP address.";
-	char hostname[256];//ƒzƒXƒgƒl[ƒ€‚Ìæ“¾
+	char hostname[256];//ãƒ›ã‚¹ãƒˆãƒãƒ¼ãƒ ã®å–å¾—
 	if (gethostname(hostname, sizeof(hostname)) != 0)throw "Cannot get your IP address.";
 	HOSTENT * hostend = gethostbyname(hostname);
 	if (hostend == NULL)throw "Cannot get your IP address.";
@@ -45,7 +45,7 @@ namespace Jin {
 	std::unique_ptr<udp::socket> socket_;
 	udp::endpoint endpoint_;
 	Data buf = {};
-	void serverside(unsigned short port) {//ƒT[ƒo[‚ğ—§‚Ä‚é
+	void serverside(unsigned short port) {//ã‚µãƒ¼ãƒãƒ¼ã‚’ç«‹ã¦ã‚‹
 	  socket_ = std::make_unique<udp::socket>(ioc, udp::endpoint(udp::v4(), port));
 	  do_receive();
 	  ioc.run();
@@ -55,7 +55,7 @@ namespace Jin {
 	  socket_->async_receive_from(boost::asio::buffer(buf), endpoint_,
 		[this](const boost::system::error_code & ec, std::size_t) {
 		  if (ec)throw std::exception(ec.message().c_str());
-		  temporary_data.push(buf);//ƒf[ƒ^‚ª—ˆ‚½‚çƒLƒ…[‚ÉƒvƒbƒVƒ…‚·‚é
+		  temporary_data.push(buf);//ãƒ‡ãƒ¼ã‚¿ãŒæ¥ãŸã‚‰ã‚­ãƒ¥ãƒ¼ã«ãƒ—ãƒƒã‚·ãƒ¥ã™ã‚‹
 		  do_receive();
 		}
 	  );
@@ -64,27 +64,25 @@ namespace Jin {
 
 
   public:
-	explicit GameConnect(unsigned short port = 3000) : sub(&GameConnect::serverside, this, port) {}//ƒ|[ƒg”Ô†‚ğw’è‚µ‚Äƒ\ƒPƒbƒg‚ğŠJ‚­
+	explicit GameConnect(unsigned short port = 3000) : sub(&GameConnect::serverside, this, port) {}//ãƒãƒ¼ãƒˆç•ªå·ã‚’æŒ‡å®šã—ã¦ã‚½ã‚±ãƒƒãƒˆã‚’é–‹ã
 	~GameConnect() {
 	  ioc.stop();
 	  sub.join();
 	}
 
 	template<class T>
-	void Send(std::string_view IP, unsigned short port, T data) {//IP‚Ìport‚Édata‚ğ‘—M‚·‚é
+	void Send(std::string_view IP, unsigned short port, T data) {//IPã®portã«dataã‚’é€ä¿¡ã™ã‚‹
 	  udp::socket socket(ioc);
 	  udp::endpoint endpoint = *resolver.resolve(udp::v4(), IP, std::to_string(port)).begin();
 	  socket.open(udp::v4());
 	  Data send;
 	  *(T*)send = data;
-	  std::cout << "Before sending." << std::endl;
 	  socket.send_to(boost::asio::buffer(send), endpoint);
-	  std::cout << "After sending." << std::endl;
 	}
 
 	template<class T>
-	T Get(bool state) {//‘—M‚³‚ê‚½ƒf[ƒ^‚ğ“Ç‚Ş
-	  while (state && temporary_data.empty()) { std::cout << "goes well" << std::endl; };//‚à‚µƒLƒ…[‚Ì’†g‚ª‹ó‚¾‚Á‚½‚ç‚¸‚Á‚Æ‘Ò‚Â
+	T Get(bool state) {//é€ä¿¡ã•ã‚ŒãŸãƒ‡ãƒ¼ã‚¿ã‚’èª­ã‚€
+	  while (state && temporary_data.empty()) {};//ã‚‚ã—ã‚­ãƒ¥ãƒ¼ã®ä¸­èº«ãŒç©ºã ã£ãŸã‚‰ãšã£ã¨å¾…ã¤
 	  if (!state)throw std::runtime_error("Thread terminated.");
 	  auto res = temporary_data.front();
 	  temporary_data.pop();
@@ -92,7 +90,7 @@ namespace Jin {
 	}
 
 	template<class T>
-	T Get() {//‘—M‚³‚ê‚½ƒf[ƒ^‚ğ“Ç‚Ş
+	T Get() {//é€ä¿¡ã•ã‚ŒãŸãƒ‡ãƒ¼ã‚¿ã‚’èª­ã‚€
 	  bool ex = false;
 	  return Get<T>(ex);
 	}
