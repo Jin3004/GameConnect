@@ -71,19 +71,21 @@ namespace Jin {
 	}
 
 	template<class T>
-	void Send(std::string_view IP, unsigned short port, T& data) {//IPのportにdataを送信する
+	void Send(std::string_view IP, unsigned short port, T data) {//IPのportにdataを送信する
 	  udp::socket socket(ioc);
 	  udp::endpoint endpoint = *resolver.resolve(udp::v4(), IP, std::to_string(port)).begin();
 	  socket.open(udp::v4());
 	  Data send;
 	  *(T*)send = data;
+	  std::cout << "Before sending." << std::endl;
 	  socket.send_to(boost::asio::buffer(send), endpoint);
+	  std::cout << "After sending." << std::endl;
 	}
 
 	template<class T>
-	T Get(bool& exit) {//送信されたデータを読む
-	  while (!exit && temporary_data.empty());//もしキューの中身が空だったらずっと待つ
-	  if (exit)throw "Thread terminated.";
+	T Get(bool state) {//送信されたデータを読む
+	  while (state && temporary_data.empty()) { std::cout << "goes well" << std::endl; };//もしキューの中身が空だったらずっと待つ
+	  if (!state)throw std::runtime_error("Thread terminated.");
 	  auto res = temporary_data.front();
 	  temporary_data.pop();
 	  return *(T*)res;
